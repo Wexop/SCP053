@@ -23,6 +23,9 @@ namespace SCP053
         const string VERSION = "1.0.0";
 
         public static Scp053Plugin instance;
+
+        public GameObject SCP053ActionsObject;
+        public GameObject currentSCP053Actions;
         
         public ConfigEntry<string> spawnMoonRarity;
         public ConfigEntry<int> maxSpawn;
@@ -93,6 +96,17 @@ namespace SCP053
 
             RegisterUtil.RegisterEnemyWithConfig(spawnMoonRarity.Value, creature, terminalNode, terminalKeyword,
                 creature.PowerLevel, creature.MaxCount);
+            
+            //actions
+            
+            SCP053ActionsObject = bundle.LoadAsset<GameObject>("Assets/LethalCompany/Mods/SCP053/SCP053Actions.prefab");
+
+        }
+
+        private void SpawnActionsObject()
+        {
+            if(currentSCP053Actions) return;
+            Instantiate(SCP053ActionsObject);
         }
         
         /// <summary>

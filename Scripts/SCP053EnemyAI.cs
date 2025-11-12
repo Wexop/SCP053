@@ -5,6 +5,7 @@ namespace SCP053.Scripts;
 
 public class SCP053EnemyAI : EnemyAI
 {
+    private static readonly int Scared = Animator.StringToHash("scared");
     public List<AudioClip> walkSounds;
     private readonly float runSpeed = 5f;
     private readonly float walkSpeed = 3.5f;
@@ -31,10 +32,14 @@ public class SCP053EnemyAI : EnemyAI
 
         if (lastBehaviorState != currentBehaviourStateIndex)
         {
-            
             Debug.Log($"New behavior state : {currentBehaviourStateIndex} last : {lastBehaviorState}");
             lastBehaviorState = currentBehaviourStateIndex;
             AllClientOnSwitchBehaviorState();
+        }
+        
+        if (currentBehaviourStateIndex == 1 && GameNetworkManager.Instance.localPlayerController.HasLineOfSightToPosition(transform.position + Vector3.up * 0.25f, 100f, 60))
+        {
+            GameNetworkManager.Instance.localPlayerController.JumpToFearLevel(0.8f);
         }
 
         walkSoundTimer -= Time.deltaTime;
@@ -64,6 +69,7 @@ public class SCP053EnemyAI : EnemyAI
         {
             case 0:
             {
+                TargetClosestPlayer(requireLineOfSight: true, viewWidth: 80f);
                 if (targetPlayer == null)
                 {
                     if (currentSearch.inProgress) break;
@@ -71,6 +77,19 @@ public class SCP053EnemyAI : EnemyAI
                     aiSearchRoutine.searchWidth = 50f;
                     aiSearchRoutine.searchPrecision = 8f;
                     StartSearch(ChooseFarthestNodeFromPosition(transform.position, true).position, aiSearchRoutine);
+                }
+                else if(PlayerIsTargetable(targetPlayer))
+                {
+                    SwitchToBehaviourState(1);
+                }
+
+                break;
+            }
+            case 1:
+            {
+                if (!targetPlayer || !CheckLineOfSightForPosition(targetPlayer.gameplayCamera.transform.position, width: 80f))
+                {
+                    SwitchToBehaviourState(0);
                 }
 
                 break;
@@ -85,6 +104,13 @@ public class SCP053EnemyAI : EnemyAI
             case 0:
             {
                 agent.speed = walkSpeed;
+                creatureAnimator.SetBool(Scared, false);
+                break;
+            }
+            case 1:
+            {
+                agent.speed = 0;
+                creatureAnimator.SetBool(Scared, true);
                 break;
             }
         }
