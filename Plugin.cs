@@ -10,6 +10,7 @@ using LethalConfig.ConfigItems;
 using LethalConfig.ConfigItems.Options;
 using UnityEngine;
 using LethalLib.Modules;
+using SCP053.Utils;
 
 namespace SCP053
 {
@@ -22,6 +23,10 @@ namespace SCP053
         const string VERSION = "1.0.0";
 
         public static Scp053Plugin instance;
+        
+        public ConfigEntry<string> spawnMoonRarity;
+        public ConfigEntry<int> maxSpawn;
+        public ConfigEntry<int> powerLevel;
 
         void Awake()
         {
@@ -36,7 +41,7 @@ namespace SCP053
             
             NetcodePatcher();
             LoadConfigs();
-            RegisterScrap(bundle);
+            RegisterMonster(bundle);
             
             
             Logger.LogInfo($"Scp053 is ready!");
@@ -53,17 +58,41 @@ namespace SCP053
         {
             
             //GENERAL
-            
-            //spawnMoonRarity = Config.Bind("General", "ScrapSpawnRarity", 
-            //    RarityString(40),           
-            //    "Chance for scrap to spawn for any moon, example => assurance:100,offense:50 . You need to restart the game.");
-            //CreateStringConfig(spawnMoonRarity, true);
+            spawnMoonRarity = Config.Bind("General", "SpawnRarity",
+                "Modded:50,ExperimentationLevel:40,AssuranceLevel:40,VowLevel:40,OffenseLevel:45,MarchLevel:45,RendLevel:50,DineLevel:50,TitanLevel:60,Adamance:45,Embrion:50,Artifice:60",
+                "Chance for SCP 053 to spawn for any moon, example => assurance:100,offense:50 . You need to restart the game.");
+            CreateStringConfig(spawnMoonRarity, true);
+
+            maxSpawn = Config.Bind("General", "maxSpawn", 1,
+                "Max SCP053 spawn in one day");
+            CreateIntConfig(maxSpawn, 1, 30);
+
+            powerLevel = Config.Bind("General", "powerLevel", 1,
+                "SCP053 power level");
+            CreateIntConfig(maxSpawn, 1, 10);
  
         }
         
-        void RegisterScrap(AssetBundle bundle)
+        void RegisterMonster(AssetBundle bundle)
         {
+            //creature
+            EnemyType creature = bundle.LoadAsset<EnemyType>("Assets/LethalCompany/Mods/SCP053/SCP053.asset");
+            TerminalNode terminalNode =
+                bundle.LoadAsset<TerminalNode>("Assets/LethalCompany/Mods/SCP053/SCP053TerminalNode.asset");
+            TerminalKeyword terminalKeyword =
+                bundle.LoadAsset<TerminalKeyword>("Assets/LethalCompany/Mods/SCP053/SCP053TerminalKeyword.asset");
 
+            creature.MaxCount = maxSpawn.Value;
+            creature.PowerLevel = powerLevel.Value;
+
+            Logger.LogInfo($"{creature.name} FOUND");
+            Logger.LogInfo($"{creature.enemyPrefab} prefab");
+            NetworkPrefabs.RegisterNetworkPrefab(creature.enemyPrefab);
+            Utilities.FixMixerGroups(creature.enemyPrefab);
+
+
+            RegisterUtil.RegisterEnemyWithConfig(spawnMoonRarity.Value, creature, terminalNode, terminalKeyword,
+                creature.PowerLevel, creature.MaxCount);
         }
         
         /// <summary>
