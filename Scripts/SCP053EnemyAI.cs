@@ -1,5 +1,11 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections;
+using System.Collections.Generic;
+using System.Linq;
+using GameNetcodeStuff;
+using Unity.Netcode;
 using UnityEngine;
+using Random = UnityEngine.Random;
 
 namespace SCP053.Scripts;
 
@@ -7,7 +13,14 @@ public class SCP053EnemyAI : EnemyAI
 {
     private static readonly int Scared = Animator.StringToHash("scared");
     public List<AudioClip> walkSounds;
-    private readonly float runSpeed = 5f;
+    
+    public AudioClip scaredSoundBuildUp;
+    public AudioClip killPlayerSound;
+
+    public Light killPlayerLight;
+    
+    public GameObject meshObject;
+    
     private readonly float walkSpeed = 3.5f;
 
     private float aiInterval = 0.2f;
@@ -16,14 +29,31 @@ public class SCP053EnemyAI : EnemyAI
     private readonly float walkSoundDelayWalk = 0.9f;
 
     private float walkSoundTimer;
+    
+    private bool isLocalPlayerTargeted;
+    private PlayerControllerB player;
+
+    private float timeInFear = 0f;
+    private float maxTimeInFear = 10f;
+    private float fearPower = 0f;
+
+    private List<Light> ligthsClose = new List<Light>();
+
+    private Coroutine lightCoroutine;
+    
 
     public override void Start()
     {
+        Scp053Plugin.instance.SpawnActionsObject();
+        
         base.Start();
 
         agent.speed = walkSpeed;
         agent.acceleration = 255f;
         agent.angularSpeed = 900f;
+        
+        killPlayerLight.enabled = false;
+        
     }
 
     public override void Update()
@@ -47,10 +77,12 @@ public class SCP053EnemyAI : EnemyAI
         //WALKSOUNDS
         if (walkSoundTimer <= 0f)
         {
+            if(currentBehaviourStateIndex != 0) return;
             var randomSound = walkSounds[Random.Range(0, walkSounds.Count)];
             creatureSFX.PlayOneShot(randomSound);
             walkSoundTimer = currentBehaviourStateIndex == 1 ? walkSoundDelayRun : walkSoundDelayWalk;
         }
+
 
         if (!IsServer) return;
 
@@ -61,13 +93,96 @@ public class SCP053EnemyAI : EnemyAI
         }
     }
 
+    private void CancelPlayerEffect()
+    {
+        if(!player) return;
+        player.disableLookInput = false;
+        player.disableMoveInput = false;
+    }
+
+    private void LateUpdate()
+    {
+        
+        isLocalPlayerTargeted  = targetPlayer?.playerClientId == GameNetworkManager.Instance.localPlayerController.playerClientId;
+
+        
+        if (currentBehaviourStateIndex == 1)
+        {
+            timeInFear += Time.deltaTime;
+        }
+        
+        fearPower = Mathf.Clamp(timeInFear / maxTimeInFear, 0f, 1f);
+
+        
+        if (isLocalPlayerTargeted && currentBehaviourStateIndex == 1)
+        {
+            Debug.Log(fearPower);
+            if(fearPower > 0.8f)
+            {
+                HUDManager.Instance.ShakeCamera(ScreenShakeType.VeryStrong);
+            }
+            else if(fearPower > 0.6f)
+            {
+                HUDManager.Instance.ShakeCamera(ScreenShakeType.Big);
+            }
+            else if(fearPower > 0.4f)
+            {
+                HUDManager.Instance.ShakeCamera(ScreenShakeType.Small);
+            }
+            
+            Scp053Plugin.instance.currentSCP053Actions.Enable(true);
+            Scp053Plugin.instance.currentSCP053Actions.SetVolumeWeight(fearPower);
+            
+            player = GameNetworkManager.Instance.localPlayerController;
+
+            player.transform.LookAt(eye);
+            player.transform.localRotation = Quaternion.Euler(new Vector3(0,player.transform.localRotation.eulerAngles.y,0));
+            
+            player.gameplayCamera.transform.LookAt(eye);
+            player.gameplayCamera.transform.localRotation = Quaternion.Euler(new Vector3(player.gameplayCamera.transform.localRotation.x,0,0));
+
+
+
+            if(fearPower < 0.5)
+            {
+                player.disableMoveInput = true;
+                player.disableLookInput = true;
+                //player.thisController.Move(transform.position * (Time.deltaTime * 0.1f)) ;
+                
+            }
+            else
+            {
+                CancelPlayerEffect();
+            }
+
+            if (fearPower >= 1f)
+            {
+                if(IsServer) SwitchToBehaviourState(2);
+            }
+        }
+        else if (isLocalPlayerTargeted && currentBehaviourStateIndex == 2)
+        {
+            player.disableMoveInput = true;
+            player.disableLookInput = true;
+            
+            var positionJumpScare = player.gameplayCamera.transform.position + player.gameplayCamera.transform.forward * 1.4f;
+            transform.position = positionJumpScare - Vector3.up * 1.5f;
+            transform.LookAt(player.gameplayCamera.transform);
+            transform.eulerAngles = new Vector3(0, transform.eulerAngles.y, 0);
+        }
+        else
+        {
+            Scp053Plugin.instance.currentSCP053Actions.Enable(false);
+        }
+    }
+
     public override void DoAIInterval()
     {
         base.DoAIInterval();
 
         switch (currentBehaviourStateIndex)
         {
-            case 0:
+            case 0: //walk
             {
                 TargetClosestPlayer(requireLineOfSight: true, viewWidth: 80f);
                 if (targetPlayer == null)
@@ -78,19 +193,25 @@ public class SCP053EnemyAI : EnemyAI
                     aiSearchRoutine.searchPrecision = 8f;
                     StartSearch(ChooseFarthestNodeFromPosition(transform.position, true).position, aiSearchRoutine);
                 }
-                else if(PlayerIsTargetable(targetPlayer))
+                else if(PlayerIsTargetable(targetPlayer) && Vector3.Distance(transform.position, targetPlayer.transform.position) < 8f)
                 {
                     SwitchToBehaviourState(1);
                 }
 
                 break;
             }
-            case 1:
+            case 1: //scared
             {
                 if (!targetPlayer || !CheckLineOfSightForPosition(targetPlayer.gameplayCamera.transform.position, width: 80f))
                 {
                     SwitchToBehaviourState(0);
                 }
+
+                break;
+            }
+            case 2: //kill
+            {
+                
 
                 break;
             }
@@ -103,16 +224,112 @@ public class SCP053EnemyAI : EnemyAI
         {
             case 0:
             {
+                timeInFear = 0f;
+                fearPower = 0f;
                 agent.speed = walkSpeed;
                 creatureAnimator.SetBool(Scared, false);
+                creatureVoice.Stop();
+                CancelPlayerEffect();
+                //lights
+                StopCoroutine(lightCoroutine);
+                SwitchLightsActive(true);
+                ligthsClose.Clear();
+                
                 break;
             }
             case 1:
             {
                 agent.speed = 0;
                 creatureAnimator.SetBool(Scared, true);
+                creatureVoice.PlayOneShot(scaredSoundBuildUp);
+                lightCoroutine = StartCoroutine(PlayWithLights());
+                break;
+            }
+            case 2:
+            {
+                agent.speed = 0;
+                creatureAnimator.SetBool(Scared, true);
+                if (IsServer) KillPlayerClientRpc();
+                //lights
+                StopCoroutine(lightCoroutine);
                 break;
             }
         }
+    }
+
+    private void SwitchLightsActive(bool active)
+    {
+        ligthsClose.ForEach(l => l.enabled = active);
+    }
+
+    private void RandomEnableLights()
+    {
+        ligthsClose.ForEach(l => l.enabled = Random.Range(0f,1f) > 0.3f);
+    }
+
+    private IEnumerator PlayWithLights()
+    {
+        ligthsClose.Clear();
+        var lights = FindObjectsByType<Light>(FindObjectsInactive.Exclude, FindObjectsSortMode.None).ToList();
+        
+        lights.ForEach(l =>
+        {
+            if (l.enabled && Vector3.Distance(l.transform.position, transform.position) < 15f)
+            {
+                ligthsClose.Add(l);
+            }
+        });
+
+        while (currentBehaviourStateIndex == 1)
+        {
+            RandomEnableLights();
+            
+            yield return new WaitForSeconds(Random.Range(0.2f, 1.5f));
+            
+        }
+        
+    }
+
+    [ClientRpc]
+    private void KillPlayerClientRpc()
+    {
+        StartCoroutine(KillPlayer());
+    }
+    
+    private IEnumerator KillPlayer()
+    {
+        SwitchLightsActive(false);
+        meshObject.SetActive(false);
+        yield return new WaitForSeconds(1f);
+        meshObject.SetActive(true);
+        
+        killPlayerLight.enabled = true;
+        creatureVoice.PlayOneShot(killPlayerSound);
+        if (isLocalPlayerTargeted)
+        {
+            Scp053Plugin.instance.currentSCP053Actions.Enable(true);
+            Scp053Plugin.instance.currentSCP053Actions.SetVolumeWeight(0.7f);
+            HUDManager.Instance.ShakeCamera(ScreenShakeType.Big);
+        }
+        
+        yield return new WaitForSeconds(2f);
+        player.KillPlayer(Vector3.back);
+        CancelPlayerEffect();
+
+        player = null;
+
+        if (isLocalPlayerTargeted)
+        {
+            Scp053Plugin.instance.currentSCP053Actions.Enable(false);
+        }
+        
+        
+        killPlayerLight.enabled = false;
+        SwitchLightsActive(true);
+        ligthsClose.Clear();
+
+        if (IsServer) SwitchToBehaviourState(0);
+
+
     }
 }

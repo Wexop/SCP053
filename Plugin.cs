@@ -10,7 +10,9 @@ using LethalConfig.ConfigItems;
 using LethalConfig.ConfigItems.Options;
 using UnityEngine;
 using LethalLib.Modules;
+using SCP053.Scripts;
 using SCP053.Utils;
+using Object = UnityEngine.Object;
 
 namespace SCP053
 {
@@ -25,7 +27,7 @@ namespace SCP053
         public static Scp053Plugin instance;
 
         public GameObject SCP053ActionsObject;
-        public GameObject currentSCP053Actions;
+        public Scp053Actions currentSCP053Actions;
         
         public ConfigEntry<string> spawnMoonRarity;
         public ConfigEntry<int> maxSpawn;
@@ -100,13 +102,17 @@ namespace SCP053
             //actions
             
             SCP053ActionsObject = bundle.LoadAsset<GameObject>("Assets/LethalCompany/Mods/SCP053/SCP053Actions.prefab");
+            Logger.LogInfo($"{SCP053ActionsObject.name} FOUND");
 
         }
 
-        private void SpawnActionsObject()
+        public void SpawnActionsObject()
         {
-            if(currentSCP053Actions) return;
-            Instantiate(SCP053ActionsObject);
+            if(currentSCP053Actions != null ) return;
+            GameObject o = GameNetworkManager.Instantiate(SCP053ActionsObject);
+            currentSCP053Actions = o.GetComponent<Scp053Actions>();
+            Debug.Log($"{currentSCP053Actions.name} SPAWNED");
+
         }
         
         /// <summary>
