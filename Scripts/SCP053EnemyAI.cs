@@ -374,6 +374,10 @@ public class SCP053EnemyAI : EnemyAI
         currentTargetPlayerId = id;
         isLocalPlayerTargeted = id == GameNetworkManager.Instance.localPlayerController.playerClientId;
         playersSeen.Add(id);
+        if (isLocalPlayerTargeted)
+        {
+            GameNetworkManager.Instance.localPlayerController.sprintMeter = 0f;
+        }
     }
 
     [ServerRpc(RequireOwnership = false)]

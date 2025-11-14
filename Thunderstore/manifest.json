@@ -2,7 +2,7 @@
   "name": "SCP053",
   "version_number": "1.0.0",
   "website_url": "https://github.com/Wexop/SCP053",
-  "description": "",
+  "description": "Add SCP053 young girl as a monster. Don't let her look at you...",
   "dependencies": [
     "BepInEx-BepInExPack-5.4.2100",
     "AinaVT-LethalConfig-1.4.6",
