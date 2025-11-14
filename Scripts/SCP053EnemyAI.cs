@@ -12,6 +12,7 @@ namespace SCP053.Scripts;
 public class SCP053EnemyAI : EnemyAI
 {
     private static readonly int Scared = Animator.StringToHash("scared");
+    private static readonly int Idle = Animator.StringToHash("idle");
     public List<AudioClip> walkSounds;
     
     public AudioClip scaredSoundBuildUp;
@@ -40,6 +41,8 @@ public class SCP053EnemyAI : EnemyAI
     private List<Light> ligthsClose = new List<Light>();
 
     private Coroutine lightCoroutine;
+
+    private ulong? currentTargetPlayerId;
     
 
     public override void Start()
@@ -74,6 +77,7 @@ public class SCP053EnemyAI : EnemyAI
 
         walkSoundTimer -= Time.deltaTime;
 
+
         //WALKSOUNDS
         if (walkSoundTimer <= 0f)
         {
@@ -83,9 +87,8 @@ public class SCP053EnemyAI : EnemyAI
             walkSoundTimer = currentBehaviourStateIndex == 1 ? walkSoundDelayRun : walkSoundDelayWalk;
         }
 
-
         if (!IsServer) return;
-
+        
         if (aiInterval <= 0)
         {
             aiInterval = AIIntervalTime;
@@ -98,25 +101,20 @@ public class SCP053EnemyAI : EnemyAI
         if(!player) return;
         player.disableLookInput = false;
         player.disableMoveInput = false;
+        player.gameplayCamera.transform.localRotation = Quaternion.Euler(new Vector3(player.gameplayCamera.transform.localRotation.x,0,0));
     }
 
     private void LateUpdate()
     {
-        
-        isLocalPlayerTargeted  = targetPlayer?.playerClientId == GameNetworkManager.Instance.localPlayerController.playerClientId;
-
-        
         if (currentBehaviourStateIndex == 1)
         {
             timeInFear += Time.deltaTime;
         }
         
         fearPower = Mathf.Clamp(timeInFear / maxTimeInFear, 0f, 1f);
-
         
         if (isLocalPlayerTargeted && currentBehaviourStateIndex == 1)
         {
-            Debug.Log(fearPower);
             if(fearPower > 0.8f)
             {
                 HUDManager.Instance.ShakeCamera(ScreenShakeType.VeryStrong);
@@ -139,35 +137,42 @@ public class SCP053EnemyAI : EnemyAI
             player.transform.localRotation = Quaternion.Euler(new Vector3(0,player.transform.localRotation.eulerAngles.y,0));
             
             player.gameplayCamera.transform.LookAt(eye);
-            player.gameplayCamera.transform.localRotation = Quaternion.Euler(new Vector3(player.gameplayCamera.transform.localRotation.x,0,0));
-
-
+            
+            player.disableLookInput = true;
 
             if(fearPower < 0.5)
             {
                 player.disableMoveInput = true;
-                player.disableLookInput = true;
+                
                 //player.thisController.Move(transform.position * (Time.deltaTime * 0.1f)) ;
                 
             }
             else
             {
-                CancelPlayerEffect();
+                player.disableMoveInput = false;
             }
+            
+ 
 
             if (fearPower >= 1f)
             {
-                if(IsServer) SwitchToBehaviourState(2);
+                SwitchToBehaviourServerRpc(2);
             }
         }
-        else if (isLocalPlayerTargeted && currentBehaviourStateIndex == 2)
+        else if (currentBehaviourStateIndex == 2 )
         {
-            player.disableMoveInput = true;
-            player.disableLookInput = true;
+
+            if (isLocalPlayerTargeted)
+            {
+                player.disableMoveInput = true;
+                player.disableLookInput = true;
+            }
             
-            var positionJumpScare = player.gameplayCamera.transform.position + player.gameplayCamera.transform.forward * 1.4f;
-            transform.position = positionJumpScare - Vector3.up * 1.5f;
-            transform.LookAt(player.gameplayCamera.transform);
+            var currentPlayertarget = StartOfRound.Instance.allPlayerScripts.ToList().Find(p => p.playerClientId == currentTargetPlayerId);
+            
+            var positionJumpScare = currentPlayertarget.gameplayCamera.transform.position + currentPlayertarget.gameplayCamera.transform.forward * 1.7f;
+            transform.position = positionJumpScare - Vector3.up * 1f;
+            transform.LookAt(currentPlayertarget.gameplayCamera.transform);
             transform.eulerAngles = new Vector3(0, transform.eulerAngles.y, 0);
         }
         else
@@ -193,8 +198,9 @@ public class SCP053EnemyAI : EnemyAI
                     aiSearchRoutine.searchPrecision = 8f;
                     StartSearch(ChooseFarthestNodeFromPosition(transform.position, true).position, aiSearchRoutine);
                 }
-                else if(PlayerIsTargetable(targetPlayer) && Vector3.Distance(transform.position, targetPlayer.transform.position) < 8f)
+                else if(PlayerIsTargetable(targetPlayer) && Vector3.Distance(transform.position, targetPlayer.transform.position) < 12f)
                 {
+                    ChangeTargetPlayerIdClientRpc(targetPlayer.playerClientId);
                     SwitchToBehaviourState(1);
                 }
 
@@ -202,8 +208,10 @@ public class SCP053EnemyAI : EnemyAI
             }
             case 1: //scared
             {
+                
                 if (!targetPlayer || !CheckLineOfSightForPosition(targetPlayer.gameplayCamera.transform.position, width: 80f))
                 {
+                    ChangeTargetPlayerIdClientRpc(555);
                     SwitchToBehaviourState(0);
                 }
 
@@ -228,6 +236,8 @@ public class SCP053EnemyAI : EnemyAI
                 fearPower = 0f;
                 agent.speed = walkSpeed;
                 creatureAnimator.SetBool(Scared, false);
+                creatureAnimator.SetBool(Idle, false);
+
                 creatureVoice.Stop();
                 CancelPlayerEffect();
                 //lights
@@ -241,6 +251,8 @@ public class SCP053EnemyAI : EnemyAI
             {
                 agent.speed = 0;
                 creatureAnimator.SetBool(Scared, true);
+                creatureAnimator.SetBool(Idle, false);
+
                 creatureVoice.PlayOneShot(scaredSoundBuildUp);
                 lightCoroutine = StartCoroutine(PlayWithLights());
                 break;
@@ -249,6 +261,7 @@ public class SCP053EnemyAI : EnemyAI
             {
                 agent.speed = 0;
                 creatureAnimator.SetBool(Scared, true);
+                creatureAnimator.SetBool(Idle, true);
                 if (IsServer) KillPlayerClientRpc();
                 //lights
                 StopCoroutine(lightCoroutine);
@@ -295,6 +308,16 @@ public class SCP053EnemyAI : EnemyAI
     {
         StartCoroutine(KillPlayer());
     }
+
+    [ClientRpc]
+    private void ChangeTargetPlayerIdClientRpc(ulong id)
+    {
+        currentTargetPlayerId = id;
+        isLocalPlayerTargeted = id == GameNetworkManager.Instance.localPlayerController.playerClientId;
+        Debug.Log($"IS LOCAL PLAYER TARGET {isLocalPlayerTargeted}");
+    }
+
+
     
     private IEnumerator KillPlayer()
     {
@@ -308,18 +331,19 @@ public class SCP053EnemyAI : EnemyAI
         if (isLocalPlayerTargeted)
         {
             Scp053Plugin.instance.currentSCP053Actions.Enable(true);
-            Scp053Plugin.instance.currentSCP053Actions.SetVolumeWeight(0.7f);
-            HUDManager.Instance.ShakeCamera(ScreenShakeType.Big);
+            Scp053Plugin.instance.currentSCP053Actions.SetVolumeWeight(0.9f);
+            HUDManager.Instance.ShakeCamera(ScreenShakeType.VeryStrong);
         }
         
         yield return new WaitForSeconds(2f);
-        player.KillPlayer(Vector3.back);
-        CancelPlayerEffect();
 
-        player = null;
 
         if (isLocalPlayerTargeted)
         {
+            GameNetworkManager.Instance.localPlayerController.KillPlayer(Vector3.back);
+            CancelPlayerEffect();
+            
+            player = null;
             Scp053Plugin.instance.currentSCP053Actions.Enable(false);
         }
         
@@ -328,7 +352,11 @@ public class SCP053EnemyAI : EnemyAI
         SwitchLightsActive(true);
         ligthsClose.Clear();
 
-        if (IsServer) SwitchToBehaviourState(0);
+        if (IsServer)
+        {
+            ChangeTargetPlayerIdClientRpc(555);
+            SwitchToBehaviourState(0);
+        }
 
 
     }
