@@ -4,6 +4,7 @@ using BepInEx;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using BepInEx.Bootstrap;
 using BepInEx.Configuration;
 using LethalConfig;
 using LethalConfig.ConfigItems;
@@ -25,6 +26,9 @@ namespace SCP053
         const string VERSION = "1.0.0";
 
         public static Scp053Plugin instance;
+        
+        public bool isSCP682Installed;
+        public static string SCP682pReferenceChain = "ProjectSCP.SCP682";
 
         public GameObject SCP053ActionsObject;
         public Scp053Actions currentSCP053Actions;
@@ -47,9 +51,19 @@ namespace SCP053
             NetcodePatcher();
             LoadConfigs();
             RegisterMonster(bundle);
-            
+
+            Check682();
             
             Logger.LogInfo($"Scp053 is ready!");
+        }
+
+        public void Check682()
+        {
+            if (Chainloader.PluginInfos.ContainsKey(SCP682pReferenceChain))
+            {
+                Debug.Log("SCP682 found !");
+                isSCP682Installed = true;
+            }
         }
 
         string RarityString(int rarity)

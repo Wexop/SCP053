@@ -34,6 +34,9 @@
       <Reference Include="LethalConfig">
         <HintPath>..\DEPENDENCES\LETHALCONFIG\plugins\LethalConfig\LethalConfig.dll</HintPath>
       </Reference>
+      <Reference Include="ProjectSCP.SCP682">
+        <HintPath>..\DEPENDENCES\SCP682\plugins\SCP682\ProjectSCP.SCP682.dll</HintPath>
+      </Reference>
       <Reference Include="Unity.Burst, Version=0.0.0.0, Culture=neutral, PublicKeyToken=null">
         <HintPath>D:\SteamLibrary\steamapps\common\Lethal Company\Lethal Company_Data\Managed\Unity.Burst.dll</HintPath>
       </Reference>

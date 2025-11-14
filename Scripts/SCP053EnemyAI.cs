@@ -7,6 +7,8 @@ using Unity.Netcode;
 using UnityEngine;
 using Random = UnityEngine.Random;
 
+using SCP682.SCPEnemy;
+
 namespace SCP053.Scripts;
 
 public class SCP053EnemyAI : EnemyAI
@@ -48,6 +50,7 @@ public class SCP053EnemyAI : EnemyAI
     public override void Start()
     {
         Scp053Plugin.instance.SpawnActionsObject();
+        Scp053Plugin.instance.Check682();
         
         base.Start();
 
@@ -181,6 +184,23 @@ public class SCP053EnemyAI : EnemyAI
         }
     }
 
+    private bool TryToFollowScp682()
+    {
+        ModEnemyAINetworkLayer scp682 = FindObjectsByType<ModEnemyAINetworkLayer>(FindObjectsSortMode.None).ToList().Find(m => Vector3.Distance(m.transform.position, transform.position) < 50f);
+        if (scp682 && scp682.currentSearch.inProgress)
+        {
+            var aiSearchRoutine = new AISearchRoutine();
+
+            aiSearchRoutine.searchWidth = 5f;
+            aiSearchRoutine.searchPrecision = 8f;
+                    
+            StartSearch(scp682.transform.position, aiSearchRoutine);
+            //Debug.Log("FOLLOW 682");
+            return true;
+        }
+        return false;
+    }
+
     public override void DoAIInterval()
     {
         base.DoAIInterval();
@@ -192,10 +212,17 @@ public class SCP053EnemyAI : EnemyAI
                 TargetClosestPlayer(requireLineOfSight: true, viewWidth: 80f);
                 if (targetPlayer == null)
                 {
+                    if (Scp053Plugin.instance.isSCP682Installed)
+                    {
+                        var isFollowing = TryToFollowScp682();
+                        if(isFollowing) return;
+                    }
+                    
                     if (currentSearch.inProgress) break;
                     var aiSearchRoutine = new AISearchRoutine();
                     aiSearchRoutine.searchWidth = 50f;
                     aiSearchRoutine.searchPrecision = 8f;
+                    
                     StartSearch(ChooseFarthestNodeFromPosition(transform.position, true).position, aiSearchRoutine);
                 }
                 else if(PlayerIsTargetable(targetPlayer) && Vector3.Distance(transform.position, targetPlayer.transform.position) < 12f)
@@ -314,7 +341,6 @@ public class SCP053EnemyAI : EnemyAI
     {
         currentTargetPlayerId = id;
         isLocalPlayerTargeted = id == GameNetworkManager.Instance.localPlayerController.playerClientId;
-        Debug.Log($"IS LOCAL PLAYER TARGET {isLocalPlayerTargeted}");
     }
 
 
