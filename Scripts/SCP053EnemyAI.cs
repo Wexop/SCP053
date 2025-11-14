@@ -45,6 +45,13 @@ public class SCP053EnemyAI : EnemyAI
     private Coroutine lightCoroutine;
 
     private ulong? currentTargetPlayerId;
+
+    private List<ulong> playersSeen = new List<ulong>();
+    private float hitPlayerCurseTimer;
+    private float hitPlayerCurseDelay = 0.5f;
+
+    private float showActionsTimer;
+    private float showActionsBaseTime = 4f;
     
 
     public override void Start()
@@ -65,6 +72,9 @@ public class SCP053EnemyAI : EnemyAI
     public override void Update()
     {
         base.Update();
+        
+        hitPlayerCurseTimer -= Time.deltaTime;
+        showActionsTimer -= Time.deltaTime;
 
         if (lastBehaviorState != currentBehaviourStateIndex)
         {
@@ -78,8 +88,22 @@ public class SCP053EnemyAI : EnemyAI
             GameNetworkManager.Instance.localPlayerController.JumpToFearLevel(0.8f);
         }
 
-        walkSoundTimer -= Time.deltaTime;
+        if (playersSeen.Contains(GameNetworkManager.Instance.localPlayerController.playerClientId))
+        {
+            if(hitPlayerCurseTimer > 0) return;
+            hitPlayerCurseTimer = hitPlayerCurseDelay;
+            StartOfRound.Instance.allPlayerScripts.ToList().ForEach(p =>
+            {
+                if (GameNetworkManager.Instance.localPlayerController.HasLineOfSightToPosition(p.transform.position,
+                        40f) && GameNetworkManager.Instance.localPlayerController.playerClientId != p.playerClientId && !p.isPlayerDead)
+                {
+                    DamagePlayerFromCurseServerRpc(p.playerClientId);
+                    showActionsTimer = showActionsBaseTime;
+                }
+            });
+        }
 
+        walkSoundTimer -= Time.deltaTime;
 
         //WALKSOUNDS
         if (walkSoundTimer <= 0f)
@@ -181,6 +205,14 @@ public class SCP053EnemyAI : EnemyAI
         else
         {
             Scp053Plugin.instance.currentSCP053Actions.Enable(false);
+        }
+        
+        if (showActionsTimer > 0 && !isLocalPlayerTargeted)
+        {
+            Scp053Plugin.instance.currentSCP053Actions.Enable(true);
+            Scp053Plugin.instance.currentSCP053Actions.canvas.enabled = false;
+            Scp053Plugin.instance.currentSCP053Actions.SetVolumeWeight((showActionsTimer / showActionsBaseTime) * 0.75f);
+            
         }
     }
 
@@ -324,7 +356,7 @@ public class SCP053EnemyAI : EnemyAI
         {
             RandomEnableLights();
             
-            yield return new WaitForSeconds(Random.Range(0.2f, 1.5f));
+            yield return new WaitForSeconds(Random.Range(0.2f, 0.8f));
             
         }
         
@@ -341,6 +373,22 @@ public class SCP053EnemyAI : EnemyAI
     {
         currentTargetPlayerId = id;
         isLocalPlayerTargeted = id == GameNetworkManager.Instance.localPlayerController.playerClientId;
+        playersSeen.Add(id);
+    }
+
+    [ServerRpc(RequireOwnership = false)]
+    private void DamagePlayerFromCurseServerRpc(ulong id)
+    {
+        DamagePlayerFromCurseClientRpc(id);
+    }
+
+    [ClientRpc]
+    private void DamagePlayerFromCurseClientRpc(ulong id)
+    {
+        if (id == GameNetworkManager.Instance.localPlayerController.playerClientId)
+        {
+            GameNetworkManager.Instance.localPlayerController.DamagePlayer(5);
+        }
     }
 
 

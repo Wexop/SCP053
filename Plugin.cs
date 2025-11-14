@@ -149,10 +149,18 @@ namespace SCP053
             {
                 foreach (MethodInfo method in type.GetMethods(BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static))
                 {
-                    if (method.GetCustomAttributes(typeof(RuntimeInitializeOnLoadMethodAttribute), false).Length > 0)
+                    try
                     {
-                        // Do weird magic...
-                        _ = method.Invoke(null, null);
+                        if (method.GetCustomAttributes(typeof(RuntimeInitializeOnLoadMethodAttribute), false).Length >
+                            0)
+                        {
+                            // Do weird magic...
+                            _ = method.Invoke(null, null);
+                        }
+                    }
+                    catch
+                    {
+                        continue;
                     }
                 }
             }
