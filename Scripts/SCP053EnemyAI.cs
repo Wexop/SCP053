@@ -49,6 +49,9 @@ public class SCP053EnemyAI : EnemyAI
     private List<ulong> playersSeen = new List<ulong>();
     private float hitPlayerCurseTimer;
     private float hitPlayerCurseDelay = 0.5f;
+    
+    private float seePlayerTimer;
+    private float seePlayerDelay = 2f;
 
     private float showActionsTimer;
     private float showActionsBaseTime = 4f;
@@ -75,6 +78,7 @@ public class SCP053EnemyAI : EnemyAI
         
         hitPlayerCurseTimer -= Time.deltaTime;
         showActionsTimer -= Time.deltaTime;
+        seePlayerTimer -= Time.deltaTime;
 
         if (lastBehaviorState != currentBehaviourStateIndex)
         {
@@ -95,7 +99,7 @@ public class SCP053EnemyAI : EnemyAI
             StartOfRound.Instance.allPlayerScripts.ToList().ForEach(p =>
             {
                 if (GameNetworkManager.Instance.localPlayerController.HasLineOfSightToPosition(p.transform.position,
-                        40f) && GameNetworkManager.Instance.localPlayerController.playerClientId != p.playerClientId && !p.isPlayerDead)
+                        40f) && GameNetworkManager.Instance.localPlayerController.playerClientId != p.playerClientId && !p.isPlayerDead && !GameNetworkManager.Instance.localPlayerController.isPlayerDead)
                 {
                     DamagePlayerFromCurseServerRpc(p.playerClientId);
                     showActionsTimer = showActionsBaseTime;
@@ -139,6 +143,18 @@ public class SCP053EnemyAI : EnemyAI
         }
         
         fearPower = Mathf.Clamp(timeInFear / maxTimeInFear, 0f, 1f);
+
+        if (currentBehaviourStateIndex == 1)
+        {
+            var currentPlayertarget = StartOfRound.Instance.allPlayerScripts.ToList().Find(p => p.playerClientId == currentTargetPlayerId);
+            transform.LookAt(currentPlayertarget.gameplayCamera.transform);
+            transform.eulerAngles = new Vector3(0, transform.eulerAngles.y, 0);
+        }
+        
+        if(isLocalPlayerTargeted)
+        {
+            player = GameNetworkManager.Instance.localPlayerController;
+        }
         
         if (isLocalPlayerTargeted && currentBehaviourStateIndex == 1)
         {
@@ -157,8 +173,6 @@ public class SCP053EnemyAI : EnemyAI
             
             Scp053Plugin.instance.currentSCP053Actions.Enable(true);
             Scp053Plugin.instance.currentSCP053Actions.SetVolumeWeight(fearPower);
-            
-            player = GameNetworkManager.Instance.localPlayerController;
 
             player.transform.LookAt(eye);
             player.transform.localRotation = Quaternion.Euler(new Vector3(0,player.transform.localRotation.eulerAngles.y,0));
@@ -179,8 +193,6 @@ public class SCP053EnemyAI : EnemyAI
                 player.disableMoveInput = false;
             }
             
- 
-
             if (fearPower >= 1f)
             {
                 SwitchToBehaviourServerRpc(2);
@@ -189,7 +201,7 @@ public class SCP053EnemyAI : EnemyAI
         else if (currentBehaviourStateIndex == 2 )
         {
 
-            if (isLocalPlayerTargeted)
+            if (isLocalPlayerTargeted && player)
             {
                 player.disableMoveInput = true;
                 player.disableLookInput = true;
@@ -202,32 +214,36 @@ public class SCP053EnemyAI : EnemyAI
             transform.LookAt(currentPlayertarget.gameplayCamera.transform);
             transform.eulerAngles = new Vector3(0, transform.eulerAngles.y, 0);
         }
-        else
-        {
-            Scp053Plugin.instance.currentSCP053Actions.Enable(false);
-        }
-        
-        if (showActionsTimer > 0 && !isLocalPlayerTargeted)
+        else if (showActionsTimer > 0 && !isLocalPlayerTargeted)
         {
             Scp053Plugin.instance.currentSCP053Actions.Enable(true);
             Scp053Plugin.instance.currentSCP053Actions.canvas.enabled = false;
             Scp053Plugin.instance.currentSCP053Actions.SetVolumeWeight((showActionsTimer / showActionsBaseTime) * 0.75f);
             
         }
+        else
+        {
+            Scp053Plugin.instance.currentSCP053Actions.Enable(false);
+        }
+        
+        
     }
+    
+    
+    private Vector3 GetClosePositionToPosition(Vector3 position, float maxDistance = 1)
+    {
+        return position + new Vector3(Random.Range(-maxDistance, maxDistance), 0,
+            Random.Range(-maxDistance, maxDistance));
+    }
+
 
     private bool TryToFollowScp682()
     {
-        ModEnemyAINetworkLayer scp682 = FindObjectsByType<ModEnemyAINetworkLayer>(FindObjectsSortMode.None).ToList().Find(m => Vector3.Distance(m.transform.position, transform.position) < 50f);
+        ModEnemyAINetworkLayer scp682 = FindObjectsByType<ModEnemyAINetworkLayer>(FindObjectsSortMode.None).ToList().Find(m => Vector3.Distance(m.transform.position, transform.position) < 200f);
         if (scp682 && scp682.currentSearch.inProgress)
         {
-            var aiSearchRoutine = new AISearchRoutine();
-
-            aiSearchRoutine.searchWidth = 5f;
-            aiSearchRoutine.searchPrecision = 8f;
+            SetDestinationToPosition( GetClosePositionToPosition(scp682.transform.position, 4), true);
                     
-            StartSearch(scp682.transform.position, aiSearchRoutine);
-            //Debug.Log("FOLLOW 682");
             return true;
         }
         return false;
@@ -259,6 +275,7 @@ public class SCP053EnemyAI : EnemyAI
                 }
                 else if(PlayerIsTargetable(targetPlayer) && Vector3.Distance(transform.position, targetPlayer.transform.position) < 12f)
                 {
+                    if(seePlayerTimer > 0) return;
                     ChangeTargetPlayerIdClientRpc(targetPlayer.playerClientId);
                     SwitchToBehaviourState(1);
                 }
@@ -270,7 +287,8 @@ public class SCP053EnemyAI : EnemyAI
                 
                 if (!targetPlayer || !CheckLineOfSightForPosition(targetPlayer.gameplayCamera.transform.position, width: 80f))
                 {
-                    ChangeTargetPlayerIdClientRpc(555);
+                    ChangeTargetPlayerIdClientRpc(53);
+                    seePlayerTimer = seePlayerDelay;
                     SwitchToBehaviourState(0);
                 }
 
@@ -323,7 +341,7 @@ public class SCP053EnemyAI : EnemyAI
                 creatureAnimator.SetBool(Idle, true);
                 if (IsServer) KillPlayerClientRpc();
                 //lights
-                StopCoroutine(lightCoroutine);
+                if(lightCoroutine != null) StopCoroutine(lightCoroutine);
                 break;
             }
         }
@@ -368,15 +386,23 @@ public class SCP053EnemyAI : EnemyAI
         StartCoroutine(KillPlayer());
     }
 
-    [ClientRpc]
-    private void ChangeTargetPlayerIdClientRpc(ulong id)
+    [ServerRpc(RequireOwnership = false)]
+    private void ChangeTargetPlayerIdServerRpc(ulong id, bool instaKill = false)
     {
+        ChangeTargetPlayerIdClientRpc(id, instaKill);
+    }
+
+    [ClientRpc]
+    private void ChangeTargetPlayerIdClientRpc(ulong id, bool instaKill = false)
+    {
+        Debug.Log($"NEW CURRENT PLAYER ID {id}");
         currentTargetPlayerId = id;
         isLocalPlayerTargeted = id == GameNetworkManager.Instance.localPlayerController.playerClientId;
         playersSeen.Add(id);
         if (isLocalPlayerTargeted)
         {
             GameNetworkManager.Instance.localPlayerController.sprintMeter = 0f;
+            if(instaKill) SwitchToBehaviourServerRpc(2);
         }
     }
 
@@ -391,7 +417,7 @@ public class SCP053EnemyAI : EnemyAI
     {
         if (id == GameNetworkManager.Instance.localPlayerController.playerClientId)
         {
-            GameNetworkManager.Instance.localPlayerController.DamagePlayer(5);
+            GameNetworkManager.Instance.localPlayerController.DamagePlayer(2);
         }
     }
 
@@ -405,6 +431,7 @@ public class SCP053EnemyAI : EnemyAI
         meshObject.SetActive(true);
         
         killPlayerLight.enabled = true;
+        creatureVoice.Stop();
         creatureVoice.PlayOneShot(killPlayerSound);
         if (isLocalPlayerTargeted)
         {
@@ -415,6 +442,7 @@ public class SCP053EnemyAI : EnemyAI
         
         yield return new WaitForSeconds(2f);
 
+        Debug.Log($"KILL PLAYER {isLocalPlayerTargeted} {GameNetworkManager.Instance.localPlayerController.playerClientId} {currentTargetPlayerId}");
 
         if (isLocalPlayerTargeted)
         {
@@ -432,10 +460,29 @@ public class SCP053EnemyAI : EnemyAI
 
         if (IsServer)
         {
-            ChangeTargetPlayerIdClientRpc(555);
+            seePlayerTimer = seePlayerDelay;
+
+            ChangeTargetPlayerIdClientRpc(53);
             SwitchToBehaviourState(0);
+            
+            Debug.Log($"SERVER AFTER KILL");
         }
 
 
     }
+
+    public override void OnCollideWithPlayer(Collider other)
+    {
+        player = MeetsStandardPlayerCollisionConditions(other, false, true);
+        targetPlayer = player;
+        
+
+        if (player != null && currentBehaviourStateIndex != 2)
+        {
+            ChangeTargetPlayerIdServerRpc(player.playerClientId, true);
+        }
+        
+
+    }
+
 }
