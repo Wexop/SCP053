@@ -23,6 +23,13 @@ public class SCP053EnemyAI : EnemyAI
     public Light killPlayerLight;
     
     public GameObject meshObject;
+
+    public AudioSource voiceLinesAudio;
+    
+    public List<AudioClip> roamingAudios;
+    public List<AudioClip> scaredAudios;
+    public List<AudioClip> following682Audios;
+    
     
     private readonly float walkSpeed = 3.5f;
 
@@ -55,6 +62,14 @@ public class SCP053EnemyAI : EnemyAI
 
     private float showActionsTimer;
     private float showActionsBaseTime = 4f;
+
+    private float voiceLineRoamingTimer;
+    private float voiceLineRoamingDelay = 10f;
+
+    private float voiceLineScaredTimer;
+    private float voiceLineScaredDelay = 4f;
+
+    private bool isCloseTo682;
     
 
     public override void Start()
@@ -82,7 +97,7 @@ public class SCP053EnemyAI : EnemyAI
 
         if (lastBehaviorState != currentBehaviourStateIndex)
         {
-            Debug.Log($"New behavior state : {currentBehaviourStateIndex} last : {lastBehaviorState}");
+            //Debug.Log($"New behavior state : {currentBehaviourStateIndex} last : {lastBehaviorState}");
             lastBehaviorState = currentBehaviourStateIndex;
             AllClientOnSwitchBehaviorState();
         }
@@ -119,6 +134,24 @@ public class SCP053EnemyAI : EnemyAI
         }
 
         if (!IsServer) return;
+        
+        voiceLineRoamingTimer -= Time.deltaTime;
+        voiceLineScaredTimer -= Time.deltaTime;
+        if (voiceLineRoamingTimer < 0 && currentBehaviourStateIndex == 0 && !isCloseTo682)
+        {
+            voiceLineRoamingTimer = voiceLineRoamingDelay;
+            PlayRoamingVoiceClientRpc(Random.Range(0, roamingAudios.Count));
+        }
+        if (voiceLineRoamingTimer < 0 && currentBehaviourStateIndex == 0 && isCloseTo682)
+        {
+            voiceLineRoamingTimer = voiceLineRoamingDelay;
+            PlayFollowingVoiceClientRpc(Random.Range(0, following682Audios.Count));
+        }
+        if (voiceLineScaredTimer < 0 && currentBehaviourStateIndex == 1)
+        {
+            voiceLineScaredTimer = voiceLineScaredDelay;
+            PlayScaredVoiceClientRpc(Random.Range(0, scaredAudios.Count));
+        }
         
         if (aiInterval <= 0)
         {
@@ -158,6 +191,10 @@ public class SCP053EnemyAI : EnemyAI
         
         if (isLocalPlayerTargeted && currentBehaviourStateIndex == 1)
         {
+            if (!CheckLineOfSightForPosition(player.gameplayCamera.transform.position, width: 80f))
+            {
+                SwitchToBehaviourServerRpc(0);
+            }
             if(fearPower > 0.8f)
             {
                 HUDManager.Instance.ShakeCamera(ScreenShakeType.VeryStrong);
@@ -243,9 +280,12 @@ public class SCP053EnemyAI : EnemyAI
         if (scp682 && scp682.currentSearch.inProgress)
         {
             SetDestinationToPosition( GetClosePositionToPosition(scp682.transform.position, 4), true);
+            isCloseTo682 = Vector3.Distance(scp682.transform.position, transform.position) <= 20f;
+
                     
             return true;
         }
+
         return false;
     }
 
@@ -265,7 +305,7 @@ public class SCP053EnemyAI : EnemyAI
                         var isFollowing = TryToFollowScp682();
                         if(isFollowing) return;
                     }
-                    
+                    isCloseTo682 = false;
                     if (currentSearch.inProgress) break;
                     var aiSearchRoutine = new AISearchRoutine();
                     aiSearchRoutine.searchWidth = 50f;
@@ -285,10 +325,9 @@ public class SCP053EnemyAI : EnemyAI
             case 1: //scared
             {
                 
-                if (!targetPlayer || !CheckLineOfSightForPosition(targetPlayer.gameplayCamera.transform.position, width: 80f))
+                if (!targetPlayer)
                 {
                     ChangeTargetPlayerIdClientRpc(53);
-                    seePlayerTimer = seePlayerDelay;
                     SwitchToBehaviourState(0);
                 }
 
@@ -314,6 +353,8 @@ public class SCP053EnemyAI : EnemyAI
                 agent.speed = walkSpeed;
                 creatureAnimator.SetBool(Scared, false);
                 creatureAnimator.SetBool(Idle, false);
+                seePlayerTimer = seePlayerDelay;
+
 
                 creatureVoice.Stop();
                 CancelPlayerEffect();
@@ -339,6 +380,7 @@ public class SCP053EnemyAI : EnemyAI
                 agent.speed = 0;
                 creatureAnimator.SetBool(Scared, true);
                 creatureAnimator.SetBool(Idle, true);
+                voiceLinesAudio.Stop();
                 if (IsServer) KillPlayerClientRpc();
                 //lights
                 if(lightCoroutine != null) StopCoroutine(lightCoroutine);
@@ -395,7 +437,7 @@ public class SCP053EnemyAI : EnemyAI
     [ClientRpc]
     private void ChangeTargetPlayerIdClientRpc(ulong id, bool instaKill = false)
     {
-        Debug.Log($"NEW CURRENT PLAYER ID {id}");
+        //Debug.Log($"NEW CURRENT PLAYER ID {id}");
         currentTargetPlayerId = id;
         isLocalPlayerTargeted = id == GameNetworkManager.Instance.localPlayerController.playerClientId;
         playersSeen.Add(id);
@@ -421,6 +463,24 @@ public class SCP053EnemyAI : EnemyAI
         }
     }
 
+    [ClientRpc]
+    private void PlayRoamingVoiceClientRpc(int index)
+    {
+        voiceLinesAudio.PlayOneShot(roamingAudios[index]);
+    }
+
+    [ClientRpc]
+    private void PlayScaredVoiceClientRpc(int index)
+    {
+        voiceLinesAudio.PlayOneShot(scaredAudios[index]);
+    }
+
+    [ClientRpc]
+    private void PlayFollowingVoiceClientRpc(int index)
+    {
+        voiceLinesAudio.PlayOneShot(following682Audios[index]);
+    }
+
 
     
     private IEnumerator KillPlayer()
@@ -428,13 +488,16 @@ public class SCP053EnemyAI : EnemyAI
         SwitchLightsActive(false);
         meshObject.SetActive(false);
         yield return new WaitForSeconds(1f);
+
         meshObject.SetActive(true);
         
         killPlayerLight.enabled = true;
         creatureVoice.Stop();
         creatureVoice.PlayOneShot(killPlayerSound);
+        
         if (isLocalPlayerTargeted)
         {
+
             Scp053Plugin.instance.currentSCP053Actions.Enable(true);
             Scp053Plugin.instance.currentSCP053Actions.SetVolumeWeight(0.9f);
             HUDManager.Instance.ShakeCamera(ScreenShakeType.VeryStrong);
@@ -442,7 +505,10 @@ public class SCP053EnemyAI : EnemyAI
         
         yield return new WaitForSeconds(2f);
 
-        Debug.Log($"KILL PLAYER {isLocalPlayerTargeted} {GameNetworkManager.Instance.localPlayerController.playerClientId} {currentTargetPlayerId}");
+        
+        killPlayerLight.enabled = false;
+        SwitchLightsActive(true);
+        ligthsClose.Clear();
 
         if (isLocalPlayerTargeted)
         {
@@ -451,24 +517,10 @@ public class SCP053EnemyAI : EnemyAI
             
             player = null;
             Scp053Plugin.instance.currentSCP053Actions.Enable(false);
-        }
-        
-        
-        killPlayerLight.enabled = false;
-        SwitchLightsActive(true);
-        ligthsClose.Clear();
-
-        if (IsServer)
-        {
-            seePlayerTimer = seePlayerDelay;
-
-            ChangeTargetPlayerIdClientRpc(53);
-            SwitchToBehaviourState(0);
             
-            Debug.Log($"SERVER AFTER KILL");
+            ChangeTargetPlayerIdServerRpc(53);
+            SwitchToBehaviourServerRpc(0);
         }
-
-
     }
 
     public override void OnCollideWithPlayer(Collider other)

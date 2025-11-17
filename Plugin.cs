@@ -88,7 +88,7 @@ namespace SCP053
 
             powerLevel = Config.Bind("General", "powerLevel", 1,
                 "SCP053 power level");
-            CreateIntConfig(maxSpawn, 1, 10);
+            CreateIntConfig(powerLevel, 1, 10);
  
         }
         
