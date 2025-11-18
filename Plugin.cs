@@ -23,7 +23,7 @@ namespace SCP053
 
         const string GUID = "projectSCP.scp053";
         const string NAME = "scp053";
-        const string VERSION = "1.0.0";
+        const string VERSION = "1.0.1";
 
         public static Scp053Plugin instance;
         
@@ -36,6 +36,11 @@ namespace SCP053
         public ConfigEntry<string> spawnMoonRarity;
         public ConfigEntry<int> maxSpawn;
         public ConfigEntry<int> powerLevel;
+        
+        public ConfigEntry<float> freezePlayerTime;
+        public ConfigEntry<float> timeUntilDeath;
+        public ConfigEntry<int> playerCurseDamage;
+
 
         void Awake()
         {
@@ -89,6 +94,18 @@ namespace SCP053
             powerLevel = Config.Bind("General", "powerLevel", 1,
                 "SCP053 power level");
             CreateIntConfig(powerLevel, 1, 10);
+
+            freezePlayerTime = Config.Bind("General", "freezePlayerTimePercent", 0.5f,
+                "Freeze player duration when she sees a player. This is a percent of timeUntilDeath config value");
+            CreateFloatConfig(freezePlayerTime, 0f, 1f);
+
+            timeUntilDeath = Config.Bind("General", "timeUntilDeath", 10f,
+                "Time needed to SCP053 to look at a player and kill him if she don't loose line of sight");
+            CreateFloatConfig(timeUntilDeath, 3f, 11f);
+
+            playerCurseDamage = Config.Bind("General", "playerCurseDamage", 2,
+                "Curse damage when a player sees another player");
+            CreateIntConfig(playerCurseDamage);
  
         }
         

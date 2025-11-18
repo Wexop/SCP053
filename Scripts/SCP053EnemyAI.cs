@@ -70,6 +70,9 @@ public class SCP053EnemyAI : EnemyAI
     private float voiceLineScaredDelay = 4f;
 
     private bool isCloseTo682;
+
+    private float freezePlayerTimePercent = 0.5f;
+    private int curseDamage = 2;
     
 
     public override void Start()
@@ -85,6 +88,18 @@ public class SCP053EnemyAI : EnemyAI
         
         killPlayerLight.enabled = false;
         
+        if(IsServer)
+        {
+            SetDefaultValueClientRpc(Scp053Plugin.instance.playerCurseDamage.Value, Scp053Plugin.instance.freezePlayerTime.Value, Scp053Plugin.instance.timeUntilDeath.Value);
+        }
+    }
+
+    [ClientRpc]
+    void SetDefaultValueClientRpc(int playerCurseDamage, float freezePlayerTime, float timeUntilDeath )
+    {
+        curseDamage = playerCurseDamage;
+        freezePlayerTimePercent = freezePlayerTime;
+        maxTimeInFear = timeUntilDeath;
     }
 
     public override void Update()
@@ -218,7 +233,7 @@ public class SCP053EnemyAI : EnemyAI
             
             player.disableLookInput = true;
 
-            if(fearPower < 0.5)
+            if(fearPower < freezePlayerTimePercent)
             {
                 player.disableMoveInput = true;
                 
@@ -459,7 +474,7 @@ public class SCP053EnemyAI : EnemyAI
     {
         if (id == GameNetworkManager.Instance.localPlayerController.playerClientId)
         {
-            GameNetworkManager.Instance.localPlayerController.DamagePlayer(2);
+            GameNetworkManager.Instance.localPlayerController.DamagePlayer(curseDamage);
         }
     }
 
