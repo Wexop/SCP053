@@ -1,4 +1,4 @@
-# SCP 106
+# SCP 053
 
 ## SCP File
 
@@ -43,5 +43,6 @@ If SCP682 is also in the game, SCP053 will follow him (only in factory)
 - [JoeJoe](https://discord.com/users/167920913289838592) - Project Owner (his discord)
 - [Wexop](https://thunderstore.io/c/lethal-company/p/Wexop/) - Modder
 - [Handoko](https://www.fiverr.com/hand_design_id) - 3D modeler
+- [LizzieGirl0099]( https://www.twitch.tv/lizziegirl0099) - Voice of SCP053
 
 

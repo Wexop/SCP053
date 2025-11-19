@@ -1,5 +1,9 @@
 # Changelog
 
+### v1.0.2
+
+- Fix readme
+
 ### v1.0.1
 
 - Add some configs
