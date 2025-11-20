@@ -11,7 +11,7 @@ using SCP682.SCPEnemy;
 
 namespace SCP053.Scripts;
 
-public class SCP053EnemyAI : EnemyAI
+public class SCP053EnemyAI : EnemyAI, IHittable
 {
     private static readonly int Scared = Animator.StringToHash("scared");
     private static readonly int Idle = Animator.StringToHash("idle");
@@ -58,7 +58,7 @@ public class SCP053EnemyAI : EnemyAI
     private float hitPlayerCurseDelay = 0.5f;
     
     private float seePlayerTimer;
-    private float seePlayerDelay = 2f;
+    private float seePlayerDelay = 4f;
 
     private float showActionsTimer;
     private float showActionsBaseTime = 4f;
@@ -456,6 +456,7 @@ public class SCP053EnemyAI : EnemyAI
         currentTargetPlayerId = id;
         isLocalPlayerTargeted = id == GameNetworkManager.Instance.localPlayerController.playerClientId;
         playersSeen.Add(id);
+        StartCoroutine(RemovePlayerFromCurse(id));
         if (isLocalPlayerTargeted)
         {
             GameNetworkManager.Instance.localPlayerController.sprintMeter = 0f;
@@ -496,8 +497,13 @@ public class SCP053EnemyAI : EnemyAI
         voiceLinesAudio.PlayOneShot(following682Audios[index]);
     }
 
+    private IEnumerator RemovePlayerFromCurse(ulong id)
+    {
+        yield return new WaitForSeconds(60f);
 
-    
+        playersSeen.Remove(id);
+    }
+
     private IEnumerator KillPlayer()
     {
         SwitchLightsActive(false);
@@ -548,8 +554,17 @@ public class SCP053EnemyAI : EnemyAI
         {
             ChangeTargetPlayerIdServerRpc(player.playerClientId, true);
         }
-        
 
     }
 
+    public bool Hit(int force, Vector3 hitDirection, PlayerControllerB playerWhoHit = null, bool playHitSFX = false,
+        int hitID = -1)
+    {
+        if (playerWhoHit)
+        {
+            playerWhoHit.KillPlayer(causeOfDeath: CauseOfDeath.Unknown, bodyVelocity: Vector3.back);
+        }
+        return false;
+
+    }
 }
