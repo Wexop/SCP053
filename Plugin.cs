@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
 using BepInEx;
 using System.IO;
 using System.Linq;
@@ -13,7 +12,6 @@ using UnityEngine;
 using LethalLib.Modules;
 using SCP053.Scripts;
 using SCP053.Utils;
-using Object = UnityEngine.Object;
 
 namespace SCP053
 {
@@ -23,7 +21,7 @@ namespace SCP053
 
         const string GUID = "projectSCP.scp053";
         const string NAME = "scp053";
-        const string VERSION = "1.0.2";
+        const string VERSION = "1.0.3";
 
         public static Scp053Plugin instance;
         
@@ -83,7 +81,7 @@ namespace SCP053
             
             //GENERAL
             spawnMoonRarity = Config.Bind("General", "SpawnRarity",
-                "Modded:50,ExperimentationLevel:40,AssuranceLevel:40,VowLevel:40,OffenseLevel:45,MarchLevel:45,RendLevel:50,DineLevel:50,TitanLevel:60,Adamance:45,Embrion:50,Artifice:60",
+                "Modded:65,ExperimentationLevel:55,AssuranceLevel:55,VowLevel:55,OffenseLevel:55,MarchLevel:55,RendLevel:65,DineLevel:65,TitanLevel:70,Adamance:50,Embrion:60,Artifice:70",
                 "Chance for SCP 053 to spawn for any moon, example => assurance:100,offense:50 . You need to restart the game.");
             CreateStringConfig(spawnMoonRarity, true);
 
