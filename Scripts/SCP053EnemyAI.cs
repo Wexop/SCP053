@@ -374,7 +374,7 @@ public class SCP053EnemyAI : EnemyAI, IHittable
                 creatureVoice.Stop();
                 CancelPlayerEffect();
                 //lights
-                StopCoroutine(lightCoroutine);
+                if(lightCoroutine != null) StopCoroutine(lightCoroutine);
                 SwitchLightsActive(true);
                 ligthsClose.Clear();
                 

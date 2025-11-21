@@ -1,5 +1,9 @@
 # Changelog
 
+### v1.0.4
+
+- Fix an issue on staring
+
 ### v1.0.3
 
 - Based on lore, hit SCP053 now instant kill player.
