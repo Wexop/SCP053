@@ -21,7 +21,7 @@ namespace SCP053
 
         const string GUID = "projectSCP.scp053";
         const string NAME = "scp053";
-        const string VERSION = "1.0.4";
+        const string VERSION = "1.0.5";
 
         public static Scp053Plugin instance;
         
